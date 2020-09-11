@@ -122,14 +122,14 @@ def get_airfield_from_raw_html(html: str) -> Airfield:
     :return: An airfield.
     """
     soup = BeautifulSoup(html, 'html.parser')
-    airfield_element = soup.find(id=re.compile(f'AD-2\.\w{4}'))
+    airfield_element = soup.find(id=re.compile(r'AD-2\.EG\w{2}'))
 
     # Filter out junk that is irrelevant to API
     for div in airfield_element.find_all('span', {'class': ['sdParams', 'sdTooltip', 'AmdtDeletedAIRAC']}):
         div.decompose()
 
     airfield_raw_data = {}
-    for item in airfield_element.find_all(id=re.compile(rf'\w{4}-AD-\d+.\d'), recursive=False):
+    for item in airfield_element.find_all(id=re.compile(r'EG\w{2}-AD-\d+.\d'), recursive=False):
         title = item.find_all('h4', 'Title')[0]
         heading_number, heading = re.findall(r'.+AD\s(\d+.\d+)\s+(.+)', title.text)[0]
 
