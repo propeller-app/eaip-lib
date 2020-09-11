@@ -1,12 +1,8 @@
 # eaip-lib
 
-eaip-lib is a raw-python library used for accessing the 
-[NATS eAIP (Aeronautical Information Package)](http://www.nats-uk.ead-it.com/public/index.php) via a clean, fast and 
-efficient API.
+eaip-lib is a raw-python library used for accessing the [NATS eAIP (Aeronautical Information Package)](http://www.nats-uk.ead-it.com/public/index.php%3Foption=com_content&task=blogcategory&id=165&Itemid=3.html) via a clean, fast and efficient API.
 
-The library is capable of searching for the most recent eAIP and then extracting data and providing
-access via a clean & powerful Python API. Alternatively the release date of any
-eAIP release can be provided.
+The library is capable of searching for the most recent eAIP and then extracting data and providing access via a clean & powerful Python API. Alternatively the release date of any eAIP release can be provided.
 
 Python3.8 & `asyncio` support is built-in.
 
