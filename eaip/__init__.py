@@ -55,7 +55,8 @@ async def __get_current_version() -> typing.Union[None, datetime.datetime]:
                 return result
 
 
-async def __get_airfields_awaitable(eaip_date: datetime.datetime) -> typing.List[typing.Awaitable]:
+async def __get_airfields_awaitable(eaip_date: datetime.datetime,
+                                    bypass_cache: bool = False) -> typing.List[typing.Awaitable]:
     """
     Return list of awaitable that will yield Airfield objects eventually.
 
@@ -67,7 +68,7 @@ async def __get_airfields_awaitable(eaip_date: datetime.datetime) -> typing.List
 
     eaip_airfields_icao = await get_airfields_icao(eaip_date)
 
-    return [get_airfield(airfield_icao, eaip_date) for airfield_icao in eaip_airfields_icao]
+    return [get_airfield(airfield_icao, eaip_date, bypass_cache) for airfield_icao in eaip_airfields_icao]
 
 
 def get_formatted_date(eaip_date: datetime.datetime) -> str:
@@ -204,7 +205,7 @@ async def get_airfield(airfield_icao: str = None, eaip_date: datetime.datetime =
             return a
 
 
-async def get_airfields(eaip_date: datetime.datetime = None) -> typing.List[Airfield]:
+async def get_airfields(eaip_date: datetime.datetime = None, bypass_cache: bool = False) -> typing.List[Airfield]:
     """
     Gets all the Airfields in the eAIP, represented by Airfield
     objects.
@@ -220,12 +221,14 @@ async def get_airfields(eaip_date: datetime.datetime = None) -> typing.List[Airf
           print(airfield.icao)
 
     :param eaip_date: The date of eAIP release to scrape.
+    :param bypass_cache: Ignore the built-in cache.
     :return: All Airfields in the eAIP.
     """
-    return await asyncio.gather(*await __get_airfields_awaitable(eaip_date))
+    return await asyncio.gather(*await __get_airfields_awaitable(eaip_date, bypass_cache))
 
 
-async def get_airfields_iter(eaip_date: datetime.datetime = None) -> typing.AsyncIterator[Airfield]:
+async def get_airfields_iter(eaip_date: datetime.datetime = None,
+                             bypass_cache: bool = False) -> typing.AsyncIterator[Airfield]:
     """
     Gets all Airfields in the eAIP as an async iterator.
 
@@ -239,12 +242,13 @@ async def get_airfields_iter(eaip_date: datetime.datetime = None) -> typing.Asyn
             print(airfield.icao)
 
     :param eaip_date: The date of eAIP release to scrape.
+    :param bypass_cache: Ignore the built-in cache.
     :return: Iterable of Airfields.
     """
     if eaip_date is None:
         eaip_date = await __get_current_version()
 
-    for task in asyncio.as_completed(await __get_airfields_awaitable(eaip_date)):
+    for task in asyncio.as_completed(await __get_airfields_awaitable(eaip_date, bypass_cache)):
         yield await task
 
 
