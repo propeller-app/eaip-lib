@@ -1,0 +1,6 @@
+aiofiles
+aiohttp
+geopy
+Sphinx
+beautifulsoup4
+sphinx-rtd-theme
