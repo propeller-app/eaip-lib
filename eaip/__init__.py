@@ -250,16 +250,3 @@ async def get_airfields_iter(eaip_date: datetime.datetime = None,
 
     for task in asyncio.as_completed(await __get_airfields_awaitable(eaip_date, bypass_cache)):
         yield await task
-
-
-async def test():
-    print(str())
-
-    #print(await get_airfield('EGLK'))
-
-    async for a in get_airfields_iter():
-        print(a)
-
-
-if __name__ == '__main__':
-    asyncio.run(test())
