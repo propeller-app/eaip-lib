@@ -78,7 +78,7 @@ class OperatingHours:
     def __init__(self, *hours: typing.Tuple[datetime.time, datetime.time],
                  is_24_hr: bool = False, is_daylight: bool = False):
         if is_24_hr:
-            hours = [(datetime.time.min, datetime.time.max)]*15
+            hours = [(datetime.time.min, datetime.time.max)]*16
 
         self.hours = OperatingWeek(*hours[:8])
         self.summer = OperatingWeek(*hours[8:16])
