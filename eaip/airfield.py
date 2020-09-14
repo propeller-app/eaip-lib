@@ -171,5 +171,15 @@ class Airfield:
         """
         return False
 
+    @cached_property
+    def charts(self) -> typing.Union[None, typing.List[typing.Tuple[str, str]]]:
+        """
+        A list of PDF charts for this airfield stored as tuple (Chart Title, Chart URL).
+        """
+        if self.data['2.24']['data']:
+            return [(self.data['2.24']['data'][x][0], self.data['2.24']['links'][i])
+                    for i, x in enumerate(range(0, len(self.data['2.24']['data']), 2))]
+        return None
+
     def __repr__(self):
         return f'Airfield(icao={self.icao}, name={self.name})'
