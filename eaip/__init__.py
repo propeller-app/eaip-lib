@@ -10,6 +10,7 @@ import typing
 import aiofiles
 import aiohttp
 from bs4 import BeautifulSoup
+from urllib.parse import urljoin
 
 from eaip.airfield import Airfield
 
@@ -114,16 +115,19 @@ async def get_airfields_icao(eaip_date: datetime.datetime = None) -> typing.List
             return icao_list
 
 
-def get_airfield_from_raw_html(html: str) -> Airfield:
+def get_airfield_from_raw_html(html: str, eaip_date: datetime.datetime = None) -> Airfield:
     """
     Returns an airfield object representing eAIP html
     document passed in.
 
     :param html: The HTML document to parse.
+    :param eaip_date: The date of eAIP release.
     :return: An airfield.
     """
     soup = BeautifulSoup(html, 'html.parser')
     airfield_element = soup.find(id=re.compile(r'AD-2\.EG\w{2}'))
+
+    formatted_date = get_formatted_date(eaip_date)
 
     # Filter out junk that is irrelevant to API
     for div in airfield_element.find_all('span', {'class': ['sdParams', 'sdTooltip', 'AmdtDeletedAIRAC']}):
@@ -149,6 +153,8 @@ def get_airfield_from_raw_html(html: str) -> Airfield:
             airfield_datapoint_entry['data'] = None
 
         airfield_datapoint_entry['raw'] = item.text
+        airfield_datapoint_entry['links'] = [urljoin(EAIP_MENU_URL.format(formatted_date), link.get('href'))
+                                             for link in item.find_all('a', attrs={'href': True})]
         airfield_raw_data[heading_number] = airfield_datapoint_entry
         airfield_raw_data[heading] = airfield_datapoint_entry
 
@@ -198,7 +204,7 @@ async def get_airfield(airfield_icao: str = None, eaip_date: datetime.datetime =
     async with aiohttp.ClientSession() as session:
         async with session.get(EAIP_AIRFIELD_URL.format(formatted_date, airfield_icao)) as resp:
             airfield_content = await resp.text()
-            a = get_airfield_from_raw_html(airfield_content)
+            a = get_airfield_from_raw_html(airfield_content, eaip_date)
 
             async with aiofiles.open(cache_url, 'wb') as cache:
                 await cache.write(pickle.dumps(a))
