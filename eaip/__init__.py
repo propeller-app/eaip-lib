@@ -195,10 +195,10 @@ async def get_airfield(airfield_icao: str = None, eaip_date: datetime.datetime =
     cache_dir = os.path.join(CACHE_DIRECTORY, formatted_date)
     cache_url = os.path.join(cache_dir, f'{airfield_icao}.bin')
 
-    if not bypass_cache:
-        if not os.path.isdir(cache_dir):
-            os.makedirs(cache_dir, exist_ok=True)
+    if not os.path.isdir(cache_dir):
+        os.makedirs(cache_dir, exist_ok=True)
 
+    if not bypass_cache:
         if os.path.exists(cache_url):
             with open(cache_url, 'rb') as cache:
                 return pickle.loads(cache.read())
