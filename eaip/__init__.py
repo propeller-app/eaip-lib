@@ -17,6 +17,8 @@ from eaip.airfield import Airfield
 EAIP_INDEX_URL = 'https://www.aurora.nats.co.uk/htmlAIP/Publications/{0}-AIRAC/html/index-en-GB.html'
 EAIP_MENU_URL = 'https://www.aurora.nats.co.uk/htmlAIP/Publications/{0}-AIRAC/html/eAIP/EG-menu-en-GB.html'
 EAIP_AIRFIELD_URL = 'https://www.aurora.nats.co.uk/htmlAIP/Publications/{0}-AIRAC/html/eAIP/EG-AD-2.{1}-en-GB.html'
+EAIP_AIRSPACES_URL = 'https://www.aurora.nats.co.uk/htmlAIP/Publications/{0}-AIRAC/html/eAIP/EG-ENR-2.1-en-GB.html'
+
 
 CACHE_DIRECTORY = os.path.join(pathlib.Path.home(), '.cache', 'eaip-lib')
 """

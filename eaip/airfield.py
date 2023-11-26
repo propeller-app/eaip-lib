@@ -7,6 +7,7 @@ from geopy.point import Point
 from eaip.hours import OperatingHours, get_operating_hours_from_string
 from eaip.radio import RadioFrequency
 from eaip.runway import Runway
+from eaip.airspace import Airspace
 
 
 class Airfield:
@@ -163,6 +164,19 @@ class Airfield:
                     rfi.append(rf)
                     rfs[rf.designation] = rfi
         return rfs
+
+    @cached_property
+    def airspace(self) -> typing.List[Airspace]:
+        """
+        A list of Airspace objects.
+        """
+        if self.data['2.17']['data']:
+            return [
+                Airspace(self, row)
+                for row in self.data['2.17']['data'][2:]
+                if len(row) == 7
+            ]
+        return []
 
     @cached_property
     def ppr(self) -> bool:
