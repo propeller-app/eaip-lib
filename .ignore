@@ -8,3 +8,8 @@ docs/build/
 cache/
 data/
 __pycache__/
+danger_areas.py
+scratch.py
+map.js
+index.html
+styles.css

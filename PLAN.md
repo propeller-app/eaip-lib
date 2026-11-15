@@ -24,24 +24,28 @@ Check: `uv run python -m unittest discover -s tests` runs the test, passes, no n
 Files: eaip/__init__.py, one new test file. Add the await. Test offline by patching the version lookup.
 Do not: change anything else in that function.
 Check: unit tests pass offline.
+Read: OVERVIEW
 
 ### E3 [ ] Compute the AIRAC date instead of probing
 Human prerequisite: note one known AIRAC effective date from the eAIP index page and give it to the task.
 Files: eaip/__init__.py, tests. Replace the ~30-request probe with date arithmetic (28-day cycles from the given epoch).
 Keep an explicit eaip_date override. At most one confirming request, only when run live.
 Check: offline tests of the date function for several dates around cycle boundaries.
+Read: OVERVIEW
 
 ### E4 [ ] ENR-2.1 table to raw records
 Human prerequisite: tests/fixtures/EG-ENR-2.1.html saved (the CTA/CTR/TMA page).
 Files: new eaip/enr21.py, new tests. Parse the table into records: name, class, upper/lower limit text,
 raw boundary text, frequency/callsign, remarks. No geometry yet.
 Check: test asserts the record count and three named records against the fixture.
+Read: OVERVIEW
 
 ### E5 [ ] Boundary geometry
 Files: eaip/airspace/lateral/*.py, new tests. Fix Line.end (segment position, not type ordinal).
 Parse boundary text from E4 into a closed list of {lat,lng}, expanding arcs and circles. Compare approach with
 caa-map/airspace.py (read-only reference). Do not edit caa-map.
 Check: tests for a multi-segment boundary with an arc; first and last points equal; area looks sane.
+Read: OVERVIEW
 
 ### E6 [ ] ENR-5.1 danger, prohibited, restricted areas
 Human prerequisite: tests/fixtures/EG-ENR-5.1.html. Reuse E4/E5 code. Output: name, ident, limits, boundary.
