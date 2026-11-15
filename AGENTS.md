@@ -16,3 +16,13 @@ It is the data source for the sibling project ../caa-map, which draws a 1:500,00
   Coordinates are WGS84 decimal degrees unless the task says otherwise. State units for any numeric field.
 - If something fails twice, stop and report instead of trying more approaches.
 - End each session by appending 3-5 lines to docs/PROGRESS.md: done / next / issues.
+
+## Commands
+- Tests: `uv run python -m unittest discover -s tests` (test files must be named test_*.py)
+- Docs: `make -C docs html` (only when told)
+
+## Working from PLAN.md
+- You are given a task ID (for example E2). Read only that task: `grep -n -A30 "^### E2" PLAN.md`.
+- Do only that task. Respect its Files and Do-not lists and its acceptance check.
+- If it needs more than stated, stop and report instead of widening scope.
+- When done: tick its checkbox in PLAN.md and append to docs/PROGRESS.md. Edit nothing else outside the task.
