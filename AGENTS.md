@@ -26,3 +26,7 @@ It is the data source for the sibling project ../caa-map, which draws a 1:500,00
 - Do only that task. Respect its Files and Do-not lists and its acceptance check.
 - If it needs more than stated, stop and report instead of widening scope.
 - When done: tick its checkbox in PLAN.md and append to docs/PROGRESS.md. Edit nothing else outside the task.
+
+## Orientation
+- docs/OVERVIEW.md summarises the repo (files, API, data extracted, fetching). Read it first when the task says "Read: OVERVIEW"
+  or you need to find where something lives. Prefer it over exploring the code. If it disagrees with the code, trust the code and say so.
