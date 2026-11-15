@@ -1,0 +1,10 @@
+.venv/
+docs/_build/
+docs/build/
+*.pdf
+*.html
+*.xml
+*.zip
+cache/
+data/
+__pycache__/
