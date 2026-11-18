@@ -28,3 +28,16 @@
 - Done: `tests/test_enr21.py` (10 tests) passes; `unittest discover` 27/27 and 27/27 with sockets/DNS blocked. Failed with ImportError before the module existed.
 - Values verified from fixture: BERRY HEAD CTA 6 (1490/1494-1497/1500-1514/1518), COTSWOLD CTA 11 (4264/4268-4271/4274-4291 + 1020_700 4297-4313), LONDON UIR (570/572/573-576/579-615), PEPZE CTA 9 (11028/11041/11044), BRIZE (16816/16817/16818/16823-16827).
 - Issues: BRIZE frequency text keeps its "MHz" suffix ("119.005 MHz") and BRIZE's callsign cell has bare-text language/hours — E8 must normalise both; `TFREQUENCY;ANNOTATION` text is excluded from `frequencies` (kept nowhere yet).
+
+## 2026-11-18 (E5a)
+- Done: new `eaip/airspace/boundary.py` with pure `parse_boundary(text) -> [{lat,lng}]` and `parse_boundaries(records) -> (parsed, failed)`: vertices, clockwise/anti-clockwise arcs (stated radius, <=3 deg step, endpoints exact), lines of latitude (<=0.5 deg longitude step), optional `(label)` after a vertex, `to -`, `- thence`, `centred`/`centered`; refuses anything else with `BoundaryError` naming the fragment. Stdlib `math` only.
+- Done: `tests/test_boundary.py` (18 tests) covers coordinate conversion, BERRY HEAD CTA 6 (5 points), BRIZE (decimal 5.5 NM, "centered"), LONDON TMA 1 0.9 deg sliver, real north-crossing arcs (ABERDEEN CTA 1 cw, EDINBURGH CTA 2 acw), four synthetic north/cardinal arcs, Daventry label, LONDON FIR latitude densification, and the 419-record run.
+- Result: 416/419 parse; expected failures only LONDON UIR, SCOTTISH UIR (Same extent) and LONDON GATWICK CTA ("but excluding the Gatwick CTR."). `unittest discover` 45/45 OK, and 45/45 with sockets/DNS blocked. New test failed with ModuleNotFoundError before the module existed.
+- Areas (spherical, report only): BRIZE NORTON CTR 131.8 sq NM, BERRY HEAD CTA 6 591.4 sq NM.
+- Issues: compass-worded arcs ("thence south/north") are deliberately out of scope (E5c, tangent rule, Redhill test); legacy `Line.end`/lateral classes untouched and marked superseded in PLAN Known issues.
+
+## 2026-11-18 (E5b)
+- Done: `parse_boundaries` now returns `{name, points, exclusions, origin}` per record. A trailing `but excluding the <X>.` is stripped before parsing and recorded in `exclusions` (no geometry subtracted); `Same extent as <NAME>` copies the target's points, records the sentence in `origin`, and resolves chains/missing/failed targets into `failed` with named messages. `parse_boundary` itself is unchanged and still strict.
+- Result: all 419 records parsed, 0 failed; only LONDON GATWICK CTA has `exclusions == ['Gatwick CTR']`; LONDON UIR points == LONDON FIR, SCOTTISH UIR == SCOTTISH FIR; every record closed. Prose scan of all 419 `boundary_text` found `excluding` only in Gatwick; `except`/`within`/`bounded by`/`including` had zero hits.
+- Tests: 23 boundary tests (5 new: all-records 419/0, missing target, failed target, chain, general exclusion rule + end-anchored rejection) and 50/50 suite OK, also 50/50 with sockets/DNS blocked. New tests failed first (3 failures) before implementation.
+- Issues: remark-only exclusions (BELFAST TMA 1, BRIZE NORTON CTR) remain unread and are recorded in PLAN Known issues; L975 "bounded by" remarks flagged for E6/E8.

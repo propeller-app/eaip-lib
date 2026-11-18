@@ -4,12 +4,14 @@ Goal: extract everything caa-map needs from the NATS eAIP and export it as JSON 
 Fixtures are saved eAIP pages in tests/fixtures/. The human saves them; never fetch from the network.
 
 ## Known issues
-- Line.end uses the regex-type ordinal as a segment index (wrong after the first segment)
+- Line.end bug in legacy eaip/airspace/lateral/; superseded by boundary.py; E5c should switch airfield.py to boundary.py and delete the legacy classes
 - get_airfields_icao misses an await when eaip_date is None
 - Latest-release discovery fires ~30 concurrent requests
 - tests/airfield.py hits the live site and is not found by unittest discovery
 - Pickle cache at ~/.cache/eaip-lib can break across code changes; no expiry
 - ppr is hardcoded False
+- Exclusions that live in remarks, not boundary_text: BELFAST TMA 1 ('But excluding the Belfast CTR'), BRIZE NORTON CTR ('excluding any Airspace which is within the ATZ of Oxford Aerodrome'). exclusions is therefore incomplete until E8 decides whether to carry remarks across as a free-text note or turn them into exclusions entries.
+- L975 Crossing Area remarks (fixture lines 14843, 14878, 14920) say 'bounded by straight lines joining ...'; check in E6 or E8 whether these records describe a different shape.
 
 ## Tasks
 
@@ -40,12 +42,22 @@ raw boundary text, frequency/callsign, remarks. No geometry yet.
 Check: test asserts the record count and three named records against the fixture.
 Read: OVERVIEW
 
-### E5 [ ] Boundary geometry
-Files: eaip/airspace/lateral/*.py, new tests. Fix Line.end (segment position, not type ordinal).
-Parse boundary text from E4 into a closed list of {lat,lng}, expanding arcs and circles. Compare approach with
-caa-map/airspace.py (read-only reference). Do not edit caa-map.
-Check: tests for a multi-segment boundary with an arc; first and last points equal; area looks sane.
-Read: OVERVIEW
+### E5a [x] Boundary geometry: vertices, arcs, latitude lines
+Files: new eaip/airspace/boundary.py, new tests/test_boundary.py. Parse E4 boundary_text into a closed list of
+{lat,lng} with stdlib math only: vertices, clockwise/anti-clockwise arcs (stated radius, 3 degree step),
+lines of latitude (0.5 degree step), optional labels after vertices, "to -". Raise BoundaryError on anything else.
+Check: 416/419 parse; only LONDON UIR, SCOTTISH UIR and LONDON GATWICK CTA fail; arcs cross north both ways.
+
+### E5b [x] Boundary geometry: exclusions and same-extent references
+Files: eaip/airspace/boundary.py, tests. Handle the "but excluding" sentence (LONDON GATWICK CTA) and resolve
+"Same extent as" (LONDON UIR, SCOTTISH UIR). Daventry record if still failing.
+
+### E5c [ ] ATZ boundaries from AD 2.17
+Files: eaip/airspace/boundary.py, eaip/airfield.py, tests. Parse AD 2.17 ATZ text with the same parser.
+Compass-worded arcs ("thence south/north by the arc") must be resolved by matching the word to the arc's
+initial tangent (direction of travel at the arc start), NOT by mapping south/north to clockwise; Redhill ATZ
+in tests/fixtures/EG-AD-2.EGKR.html is the test case.
+Check: Redhill ATZ parses, closes, stays within 0.1 NM of 2 NM, and its clockwise sweep is monotonic.
 
 ### E6 [ ] ENR-5.1 danger, prohibited, restricted areas
 Human prerequisite: tests/fixtures/EG-ENR-5.1.html. Reuse E4/E5 code. Output: name, ident, limits, boundary.
