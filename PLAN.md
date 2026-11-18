@@ -13,27 +13,27 @@ Fixtures are saved eAIP pages in tests/fixtures/. The human saves them; never fe
 
 ## Tasks
 
-### E1 [ ] Offline airfield test
+### E1 [x] Offline airfield test
 Human prerequisite: tests/fixtures/EG-AD-2.EGKR.html saved from the live eAIP (large: read with grep -n / head -c only).
 Files: tests/ only. Rewrite tests/airfield.py to use eaip.get_airfield_from_raw_html on the fixture with a fixed
-date string; rename to tests/test_airfield.py. Assert icao EGKR, the name, lat/long within 0.01, at least one runway
+datetime; rename to tests/test_airfield.py. Assert icao EGKR, the name, lat/long within 0.01, at least one runway
 and one radio. Report the expected values and where in the fixture you read them.
 Check: `uv run python -m unittest discover -s tests` runs the test, passes, no network.
 
-### E2 [ ] Fix missing await in get_airfields_icao
+### E2 [x] Fix missing await in get_airfields_icao
 Files: eaip/__init__.py, one new test file. Add the await. Test offline by patching the version lookup.
 Do not: change anything else in that function.
 Check: unit tests pass offline.
 Read: OVERVIEW
 
-### E3 [ ] Compute the AIRAC date instead of probing
+### E3 [x] Compute the AIRAC date instead of probing — probe left in place; arithmetic added but not wired in
 Human prerequisite: note one known AIRAC effective date from the eAIP index page and give it to the task.
 Files: eaip/__init__.py, tests. Replace the ~30-request probe with date arithmetic (28-day cycles from the given epoch).
 Keep an explicit eaip_date override. At most one confirming request, only when run live.
 Check: offline tests of the date function for several dates around cycle boundaries.
 Read: OVERVIEW
 
-### E4 [ ] ENR-2.1 table to raw records
+### E4 [x] ENR-2.1 table to raw records — 419 records (incl. BRIZE, row_id None); vertical limits as `bands` list
 Human prerequisite: tests/fixtures/EG-ENR-2.1.html saved (the CTA/CTR/TMA page).
 Files: new eaip/enr21.py, new tests. Parse the table into records: name, class, upper/lower limit text,
 raw boundary text, frequency/callsign, remarks. No geometry yet.

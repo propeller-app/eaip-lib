@@ -91,6 +91,71 @@ def get_formatted_date(eaip_date: datetime.datetime) -> str:
     return eaip_date.strftime('%Y-%m-%d')
 
 
+EAIP_AIRAC_EPOCH = datetime.datetime(2026, 10, 29)
+"""
+Reference AIRAC effective date (naive midnight) that the date arithmetic
+below counts 28-day cycles from.
+"""
+
+EAIP_AIRAC_CYCLE_DAYS = 28
+"""
+Length of one AIRAC cycle in days.
+"""
+
+
+def airac_effective_date(
+        on: typing.Union[datetime.date, datetime.datetime, None] = None) -> datetime.datetime:
+    """
+    Returns the latest AIRAC effective date on or before ``on``.
+
+    Dates before :py:data:`EAIP_AIRAC_EPOCH` are handled too: cycles are
+    counted with floor division, so they extend backwards.
+
+    Example:
+
+    ::
+
+        airac_effective_date(datetime.date(2026, 10, 28))
+        # Expected output: datetime.datetime(2026, 10, 1, 0, 0)
+
+    :param on: Date to look back from; defaults to today.
+    :return: AIRAC effective date, naive midnight ``datetime.datetime``.
+    """
+    if on is None:
+        on = datetime.date.today()
+    if isinstance(on, datetime.datetime):
+        on = on.date()
+
+    days_since_epoch = (on - EAIP_AIRAC_EPOCH.date()).days
+    cycles = days_since_epoch // EAIP_AIRAC_CYCLE_DAYS
+    return EAIP_AIRAC_EPOCH + datetime.timedelta(days=cycles * EAIP_AIRAC_CYCLE_DAYS)
+
+
+def next_airac_date(
+        on: typing.Union[datetime.date, datetime.datetime, None] = None) -> datetime.datetime:
+    """
+    Returns the first AIRAC effective date strictly after ``on``.
+
+    Example:
+
+    ::
+
+        next_airac_date(datetime.date(2026, 10, 29))
+        # Expected output: datetime.datetime(2026, 11, 26, 0, 0)
+
+    :param on: Date to look forward from; defaults to today.
+    :return: Next AIRAC effective date, naive midnight ``datetime.datetime``.
+    """
+    if on is None:
+        on = datetime.date.today()
+    if isinstance(on, datetime.datetime):
+        on = on.date()
+
+    days_since_epoch = (on - EAIP_AIRAC_EPOCH.date()).days
+    cycles = days_since_epoch // EAIP_AIRAC_CYCLE_DAYS
+    return EAIP_AIRAC_EPOCH + datetime.timedelta(days=(cycles + 1) * EAIP_AIRAC_CYCLE_DAYS)
+
+
 async def get_airfields_icao(eaip_date: datetime.datetime = None) -> typing.List[str]:
     """
     Returns ICAO codes for all Airfields in the eAIP.
@@ -101,7 +166,7 @@ async def get_airfields_icao(eaip_date: datetime.datetime = None) -> typing.List
     :return: List of ICAO codes for airfields.
     """
     if eaip_date is None:
-        eaip_date = __get_current_version()
+        eaip_date = await __get_current_version()
 
     formatted_date = get_formatted_date(eaip_date)
 
