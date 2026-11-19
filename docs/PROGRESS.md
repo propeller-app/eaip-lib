@@ -55,3 +55,9 @@
 - Result: 1307/1307 parsed, 0 failures: 1096 polygons, 211 circles. 6 records flagged approximate with 7 phrases (EGD012, EGD031, EGD138D, EGD401, EGD710 x2, EGD802); EGR160 has the Thames exclusion; all shapes closed; 1089 direct-parser results unchanged.
 - Tests: 4 new `circle_points` tests in `tests/test_boundary.py` and 9 in new `tests/test_enr51_boundary.py`; suite now 76/76 OK, and 76/76 with sockets/DNS blocked. New tests failed with ImportError first.
 - Areas (report only, sq NM): largest EGD901Z1 20595.5, EGD901 18037.4, EGD219HZ1 16217.2; smallest EGR1U094 0.0107, EGR1U091 0.0393, EGR7U006J 0.0413. PLAN E6b ticked, E3b added, the two already-fixed Known issues removed.
+
+## 2026-11-19 (E7)
+- Done: new `eaip/enr41.py` with `parse_enr41(html)` -> 54 raw records in document order: 20 VOR/DME, 1 VOR, 31 DME, 2 NDB. Own DMS/variation parsers; no shared-file changes. One record per printed row; VOR/DME kept as `components` (E8 may split).
+- Done: `tests/test_enr41.py` (15 tests) covers counts, type/component totals, ADN/PTH/LON/HEN/BEN field values, 5 hours annotations, 21 declinations, 54 magnetic variations, and strict errors. Tests failed with ModuleNotFoundError first.
+- Result: `uv run python -m unittest discover -s tests` 91/91 OK; 91/91 with sockets/DNS blocked via `/tmp/opencode/no_net_runner.py`.
+- Issues: fixture contradicts two task notes: LON has 113 FT elevation (not None); PTH is the VOR-only row and has no DME channel. VOR/DME rows have no `VAL_GHOST_FREQ`; `paired_frequency` is only on DME-only rows. PLAN E7 ticked; E8 note added.

@@ -85,13 +85,15 @@ Do not subtract exclusions or follow natural features. Decisions:
    E8 decides whether to export flagged records.
 5. Circle wording: circles say "centred at", arcs say "centred on"; accept each only where it appears.
 
-### E7 [ ] ENR-4.1 navaids
+### E7 [x] ENR-4.1 navaids
 Human prerequisite: tests/fixtures/EG-ENR-4.1.html. Output: id, name, type, frequency, dme, location, variation if listed.
+Done: `eaip.enr41.parse_enr41` returns 54 raw records (20 VOR/DME, 1 VOR, 31 DME, 2 NDB); suite 91/91.
 
 ### E8 [ ] JSON export in caa-map schema
 Files: new eaip/export.py, new tests. One function per caa-map file in the contract. Before writing, inspect the existing
 caa-map JSON files read-only (head -c 500) and copy the exact keys and value formats.
 Check: exported output for the fixtures has the same keys and types as the existing files.
+Note: E7 yields one record per printed row (54); E8 must split VOR/DME into components if caa-map needs it, and choose declination vs magnetic_variation for rotation.
 
 ### E9 [ ] Investigate MATZ and VRP sources
 Research only, no code: report where MATZ and VRPs are published and whether NATS eAIP has them.
