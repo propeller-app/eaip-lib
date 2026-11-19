@@ -3,7 +3,8 @@ import pathlib
 import re
 import unittest
 
-from eaip.airspace.boundary import BoundaryError, parse_boundaries, parse_boundary
+from eaip.airspace.boundary import (BoundaryError, _distance_nm, circle_points,
+                                    parse_boundaries, parse_boundary)
 from eaip.enr21 import parse_enr21
 
 
@@ -363,6 +364,34 @@ class TestBoundary(unittest.TestCase):
         self.assertEqual(parsed, {})
         self.assertEqual(len(failed), 1)
         self.assertIn('but excluding', failed[0][1])
+
+
+class TestCirclePoints(unittest.TestCase):
+
+    def check_circle(self, latitude, longitude, radius_nm):
+        centre = {'lat': latitude, 'lng': longitude}
+        points = circle_points(centre, radius_nm)
+        self.assertEqual(len(points), 121)
+        self.assertEqual(points[0], points[-1])
+        self.assertEqual(points[0]['lng'], centre['lng'])
+        self.assertGreater(points[0]['lat'], centre['lat'])
+        for point in points[:-1]:
+            self.assertLess(abs(_distance_nm(centre, point) - radius_nm), 0.001)
+        return points
+
+    def test_circle_three_nm(self):
+        self.check_circle(50.0, -5.0, 3.0)
+
+    def test_circle_half_nm(self):
+        self.check_circle(51.5, 0.0, 0.5)
+
+    def test_circle_nine_nm(self):
+        self.check_circle(58.0, -7.5, 9.0)
+
+    def test_first_and_last_are_identical_objects_or_exact_copies(self):
+        points = circle_points({'lat': 50.0, 'lng': -5.0}, 3.0)
+        self.assertEqual(points[0], points[-1])
+        self.assertIsNot(points[0], points[-1])
 
 
 if __name__ == '__main__':

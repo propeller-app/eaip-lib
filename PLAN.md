@@ -5,9 +5,7 @@ Fixtures are saved eAIP pages in tests/fixtures/. The human saves them; never fe
 
 ## Known issues
 - Line.end bug in legacy eaip/airspace/lateral/; superseded by boundary.py; E5c should switch airfield.py to boundary.py and delete the legacy classes
-- get_airfields_icao misses an await when eaip_date is None
 - Latest-release discovery fires ~30 concurrent requests
-- tests/airfield.py hits the live site and is not found by unittest discovery
 - Pickle cache at ~/.cache/eaip-lib can break across code changes; no expiry
 - ppr is hardcoded False
 - Exclusions that live in remarks, not boundary_text: BELFAST TMA 1 ('But excluding the Belfast CTR'), BRIZE NORTON CTR ('excluding any Airspace which is within the ATZ of Oxford Aerodrome'). exclusions is therefore incomplete until E8 decides whether to carry remarks across as a free-text note or turn them into exclusions entries.
@@ -35,6 +33,8 @@ Keep an explicit eaip_date override. At most one confirming request, only when r
 Check: offline tests of the date function for several dates around cycle boundaries.
 Read: OVERVIEW
 
+### E3b [ ] Wire AIRAC arithmetic into latest-release discovery: use airac_effective_date/next_airac_date, keep the eaip_date override, at most one confirming request when run live, remove the ~30-request probe
+
 ### E4 [x] ENR-2.1 table to raw records — 419 records (incl. BRIZE, row_id None); vertical limits as `bands` list
 Human prerequisite: tests/fixtures/EG-ENR-2.1.html saved (the CTA/CTR/TMA page).
 Files: new eaip/enr21.py, new tests. Parse the table into records: name, class, upper/lower limit text,
@@ -59,8 +59,31 @@ initial tangent (direction of travel at the arc start), NOT by mapping south/nor
 in tests/fixtures/EG-AD-2.EGKR.html is the test case.
 Check: Redhill ATZ parses, closes, stays within 0.1 NM of 2 NM, and its clockwise sweep is monotonic.
 
-### E6 [ ] ENR-5.1 danger, prohibited, restricted areas
-Human prerequisite: tests/fixtures/EG-ENR-5.1.html. Reuse E4/E5 code. Output: name, ident, limits, boundary.
+### E6a [x] ENR-5.1 danger, prohibited, restricted areas: raw records
+Files: new eaip/enr51.py, new tests/test_enr51.py.
+Human prerequisite: tests/fixtures/EG-ENR-5.1.html. Parse the single ENR-5.1 table into 1307 raw records:
+ident/name from the TAIRSPACE;CODE_ID + TAIRSPACE;TXT_NAME pair, section from the dividers
+(Danger 446, Prohibited 2, Restricted 859), boundary_text as printed (unparsed), limits from the
+hidden TAIRSPACE_VOLUME tags (VAL/UOM/CODE upper/lower plus ANNOTATION, absent parts None),
+remarks and activation. Dividers and header rows are not records. No geometry, no network.
+Check: 1307 records, unique idents, section counts, six named records (incl. EGR157's 5 arcs),
+EGR1U001A's 2000 FT AGL, 211 circles, 7 M/FT circles, 147 latitude records, and the raw
+EGD012 coastline phrase and EGR160 Thames exclusion.
+
+### E6b [x] ENR-5.1 geometry — 1307/1307 parsed (1096 polygons, 211 circles, 7 coastline chords flagged approximate, EGR160 exclusion); ENR-2.1 419/419 unchanged
+Files: eaip/enr51.py, eaip/airspace/boundary.py, tests.
+Parse each boundary_text into a closed boundary with E5a/E5b code; add circle support and check areas.
+Do not subtract exclusions or follow natural features. Decisions:
+1. Lines of latitude: reuse boundary.py's existing parallel handling.
+2. Non-NM circles (7): convert the radius to NM internally (1 m = 1/1852 NM, 1 ft = 0.3048 m);
+   keep the printed radius and unit in the result.
+3. Thames sentence (EGR160): treat any trailing sentence starting "Excluding ..." as an exclusions
+   note with no geometry subtracted, the same rule as "but excluding" in E5b.
+4. Coastline/river phrases (6 records, 7 phrases: EGD012, EGD031, EGD138D, EGD401, EGD710 x2,
+   EGD802): draw straight chords between the printed endpoints, flag each affected record as
+   approximate, and keep the printed feature phrase in an "approximations" list. Never silent;
+   E8 decides whether to export flagged records.
+5. Circle wording: circles say "centred at", arcs say "centred on"; accept each only where it appears.
 
 ### E7 [ ] ENR-4.1 navaids
 Human prerequisite: tests/fixtures/EG-ENR-4.1.html. Output: id, name, type, frequency, dme, location, variation if listed.

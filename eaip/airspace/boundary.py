@@ -180,6 +180,28 @@ def _skip_spaces(text: str, position: int) -> int:
     return position
 
 
+def circle_points(centre: typing.Dict[str, float],
+                  radius_nm: float) -> typing.List[typing.Dict[str, float]]:
+    """
+    Closed ring for a circle of ``radius_nm`` around ``centre``.
+
+    The ring starts due north of the centre and runs clockwise in steps of
+    ``MAX_ARC_STEP_DEGREES`` (3 degrees), giving 120 segments and 121 points.
+    The last point is an exact copy of the first, so the ring is closed
+    without floating-point drift.
+
+    :param centre: ``{'lat': float, 'lng': float}`` in decimal degrees.
+    :param radius_nm: Radius in nautical miles.
+    :return: 121 ``{'lat', 'lng'}`` points, first equal to last.
+    """
+    points = [
+        _destination(centre, step * MAX_ARC_STEP_DEGREES, radius_nm)
+        for step in range(120)
+    ]
+    points.append(dict(points[0]))
+    return points
+
+
 def parse_boundary(text: str) -> typing.List[typing.Dict[str, float]]:
     """
     Parses one eAIP boundary string into a closed list of WGS84 points.
