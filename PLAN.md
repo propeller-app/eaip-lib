@@ -89,11 +89,12 @@ Do not subtract exclusions or follow natural features. Decisions:
 Human prerequisite: tests/fixtures/EG-ENR-4.1.html. Output: id, name, type, frequency, dme, location, variation if listed.
 Done: `eaip.enr41.parse_enr41` returns 54 raw records (20 VOR/DME, 1 VOR, 31 DME, 2 NDB); suite 91/91.
 
-### E8 [ ] JSON export in caa-map schema
-Files: new eaip/export.py, new tests. One function per caa-map file in the contract. Before writing, inspect the existing
-caa-map JSON files read-only (head -c 500) and copy the exact keys and value formats.
-Check: exported output for the fixtures has the same keys and types as the existing files.
-Note: E7 yields one record per printed row (54); E8 must split VOR/DME into components if caa-map needs it, and choose declination vs magnetic_variation for rotation.
+### E8a [x] ENR-2.1 JSON export (ctas.json, ctrs.json, tma.json)
+Files: new eaip/export.py, new tests/test_export_airspace.py. Writes one entry per band, routes by name keyword, skips FIR/UIR/OCA.
+Done: `eaip.export.write_airspace_files` writes 382 CTA, 1 CTR and 39 TMA entries (422 total) plus 6 skipped records; suite 103/103.
+
+### E8b [ ] JSON export: danger and navaids
+Files: extend eaip/export.py, tests. danger.json: export 1035 records whose upper limit has digits (ALT 315, AGL 661, FL 59), limits as printed with 'FL 195' -> 'FL195'; the 272 UNL/AUP records go to danger_skipped.json with reason; extra keys section, approximate (bool), source; follow-up task in caa-map to make the renderer handle AGL/FL/UNL/AUP. vors.json: only the 21 rows with a VOR component (20 VOR/DME + PTH); id, location, frequency as str(value) e.g. '114.3', dme = 'DME' in components, rotation = -(declination if present else magnetic_variation) with the sign in one constant; sanity-check CPT and BIG against the old file.
 
 ### E9 [ ] Investigate MATZ and VRP sources
 Research only, no code: report where MATZ and VRPs are published and whether NATS eAIP has them.
