@@ -118,7 +118,8 @@ def _parse_first_cell(cell, name: str) -> typing.Tuple[str, typing.List[dict]]:
 def _current_unit(record: dict) -> dict:
     if not record['units']:
         record['units'].append({'name': None, 'callsign': None, 'language': None,
-                                'hours': None, 'frequencies': []})
+                                'hours': None, 'frequencies': [],
+                                'frequency_annotations': []})
     return record['units'][-1]
 
 
@@ -129,7 +130,8 @@ def _add_units(record: dict, cell) -> None:
     for value, tag in _sd_pairs(cell):
         if tag.startswith('TUNIT'):
             record['units'].append({'name': value, 'callsign': None, 'language': None,
-                                    'hours': None, 'frequencies': []})
+                                    'hours': None, 'frequencies': [],
+                                    'frequency_annotations': []})
 
 
 def _apply_callsign_block(record: dict, cell) -> None:
@@ -159,12 +161,64 @@ def _apply_callsign_block(record: dict, cell) -> None:
         unit['hours'] = '\n'.join(hours)
 
 
-def _frequencies(cell) -> typing.List[str]:
+def _tag_key(tag: str) -> str:
     """
-    Frequency values as printed (e.g. ``132.955``, or ``119.005 MHz``).
-    ``TFREQUENCY`` annotations are not frequencies and are skipped.
+    The numeric id at the end of a ``TFREQUENCY`` sdParams tag.
     """
+    return tag.rsplit(';', 1)[-1]
+
+
+def _annotation_map(soup) -> typing.Dict[str, str]:
+    """
+    Frequency-id to annotation-text map, collapsing whitespace.
+
+    The eAIP reuses one frequency id across rows, so several annotation spans
+    may share an id; they must all carry the same text. Every annotation must
+    belong to a frequency id that exists in the document.
+    """
+    frequency_ids = set()
+    texts = {}
+    for span in soup.find_all('span', class_='SD'):
+        sibling = span.find_next_sibling('span', class_='sdParams')
+        tag = sibling.get_text(strip=True) if sibling is not None else ''
+        if not tag.startswith('TFREQUENCY;VAL_FREQ_TRANS'):
+            continue
+        frequency_ids.add(_tag_key(tag))
+
+    conflicts = set()
+    for span in soup.find_all('span', class_='SD'):
+        sibling = span.find_next_sibling('span', class_='sdParams')
+        tag = sibling.get_text(strip=True) if sibling is not None else ''
+        if not tag.startswith('TFREQUENCY;ANNOTATION'):
+            continue
+        key = _tag_key(tag)
+        text = re.sub(r'\s+', ' ', _text_with_breaks(span)).strip()
+        if key in texts and texts[key] != text:
+            conflicts.add(key)
+        texts[key] = text
+
+    if conflicts:
+        raise ValueError(
+            f'frequency id has more than one annotation: {sorted(conflicts)}')
+    orphans = sorted(set(texts) - frequency_ids)
+    if orphans:
+        raise ValueError(
+            'annotation has no matching frequency: ' + ', '.join(orphans))
+    return texts
+
+
+def _frequency_rows(cell, annotations=None
+                    ) -> typing.Tuple[typing.List[str], typing.List[typing.Optional[str]]]:
+    """
+    Frequency values as printed, with the annotation for each value (or None).
+
+    ``TFREQUENCY;ANNOTATION`` text is matched to its frequency by the numeric
+    id at the end of the sdParams tag. Annotations are not frequencies and are
+    not returned as values.
+    """
+    annotations = annotations or {}
     values = []
+    notes = []
     for span in cell.find_all('span', class_='SD'):
         sibling = span.find_next_sibling('span', class_='sdParams')
         tag = sibling.get_text(strip=True) if sibling is not None else ''
@@ -175,10 +229,30 @@ def _frequencies(cell) -> typing.List[str]:
         if isinstance(following, str) and re.match(r'\s*MHz\b', following):
             value = f'{value} MHz'
         values.append(value)
-    return values
+        notes.append(annotations.get(_tag_key(tag)))
+    return values, notes
 
 
-def _consume_record_row(record: dict, cells) -> None:
+def _frequencies(cell) -> typing.List[str]:
+    """
+    Frequency values as printed (e.g. ``132.955``, or ``119.005 MHz``).
+    ``TFREQUENCY`` annotations are not frequencies and are skipped.
+    """
+    return _frequency_rows(cell)[0]
+
+
+def _extend_frequencies(record: dict, cell, annotations=None) -> None:
+    """
+    Append a cell's frequencies and their aligned annotations to the current
+    unit.
+    """
+    values, notes = _frequency_rows(cell, annotations)
+    unit = _current_unit(record)
+    unit['frequencies'].extend(values)
+    unit['frequency_annotations'].extend(notes)
+
+
+def _consume_record_row(record: dict, cells, annotations=None) -> None:
     """
     Read the unit/callsign/frequency/remarks cells of the row owning a record.
     """
@@ -194,10 +268,10 @@ def _consume_record_row(record: dict, cells) -> None:
         elif any(tag.startswith(('TCALLSIGN_DETAIL', 'TSERVICE_STS')) for tag in tags):
             _apply_callsign_block(record, cell)
         elif any(tag.startswith('TFREQUENCY') for tag in tags):
-            _current_unit(record)['frequencies'].extend(_frequencies(cell))
+            _extend_frequencies(record, cell, annotations)
 
 
-def _consume_continuation_row(record: dict, cells) -> None:
+def _consume_continuation_row(record: dict, cells, annotations=None) -> None:
     """
     Read the extra units and extra frequency rows that belong to a record.
     """
@@ -208,7 +282,7 @@ def _consume_continuation_row(record: dict, cells) -> None:
         elif any(tag.startswith(('TCALLSIGN_DETAIL', 'TSERVICE_STS')) for tag in tags):
             _apply_callsign_block(record, cell)
         elif any(tag.startswith('TFREQUENCY') for tag in tags):
-            _current_unit(record)['frequencies'].extend(_frequencies(cell))
+            _extend_frequencies(record, cell, annotations)
 
 
 def parse_enr21(html: str) -> typing.List[typing.Dict[str, typing.Any]]:
@@ -234,11 +308,14 @@ def parse_enr21(html: str) -> typing.List[typing.Dict[str, typing.Any]]:
         whitespace-normalised lateral-limit text, unparsed), ``bands`` (list of
         ``{'upper', 'lower', 'minimum', 'class'}`` dicts in printed order;
         ``minimum`` is None when printed as '-'), ``units`` (list of
-        ``{'name', 'callsign', 'language', 'hours', 'frequencies'}`` dicts;
-        ``frequencies`` strings are as printed) and ``remarks`` (str with
+        ``{'name', 'callsign', 'language', 'hours', 'frequencies',
+        'frequency_annotations'}`` dicts; ``frequencies`` strings are as
+        printed and ``frequency_annotations`` is aligned 1:1 with them (each
+        item the collapsed annotation text, or None) and ``remarks`` (str with
         ``<br>`` turned into newlines, or None).
     """
     soup = BeautifulSoup(html, 'html.parser')
+    annotations = _annotation_map(soup)
     records = []
     current = None
 
@@ -259,8 +336,8 @@ def parse_enr21(html: str) -> typing.List[typing.Dict[str, typing.Any]]:
                 'remarks': None,
             }
             records.append(current)
-            _consume_record_row(current, cells)
+            _consume_record_row(current, cells, annotations)
         elif current is not None:
-            _consume_continuation_row(current, cells)
+            _consume_continuation_row(current, cells, annotations)
 
     return records

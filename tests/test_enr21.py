@@ -14,6 +14,9 @@ def unit(name, callsign, language, hours, frequencies):
         'language': language,
         'hours': hours,
         'frequencies': frequencies,
+        # These four expectations are all unannotated records (checked
+        # against the fixture); E8c added this key to every unit.
+        'frequency_annotations': [None] * len(frequencies),
     }
 
 

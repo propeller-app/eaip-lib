@@ -12,8 +12,8 @@ from eaip.export import export_airspaces, write_airspace_files
 FIXTURE = pathlib.Path(__file__).parent / 'fixtures' / 'EG-ENR-2.1.html'
 KEYS = {
     'name', 'upper_limit', 'lower_limit', '_class', 'frequency',
-    'squawk', 'boundary', 'band_index', 'frequencies', 'exclusions',
-    'source',
+    'frequency_annotation', 'frequency_ambiguous', 'squawk', 'boundary',
+    'band_index', 'frequencies', 'exclusions', 'source',
 }
 LIMIT_RE = re.compile(r'^(FL\d+|\d+ FT (ALT|AGL)|SFC|UNL)$')
 
@@ -79,6 +79,8 @@ class TestExportAirspaces(unittest.TestCase):
             self.assertIn(entry['_class'], 'ABCDEFG')
             self.assertTrue(entry['frequency'] == ''
                             or isinstance(entry['frequency'], float))
+            self.assertIsInstance(entry['frequency_annotation'], str)
+            self.assertIsInstance(entry['frequency_ambiguous'], bool)
             self.assertEqual(entry['squawk'], '')
             self.assertIsInstance(entry['band_index'], int)
             self.assertIsInstance(entry['frequencies'], list)
@@ -102,13 +104,18 @@ class TestExportAirspaces(unittest.TestCase):
 
     def test_london_gatwick_cta(self):
         # Fixture lines: name 8447, upper 8454, lower 8455, class 8457,
-        # first frequency 8474 (118.950).
+        # frequencies 8474/8485/8492/8499, annotations 8477/8488/8495/8502.
+        # 118.950 and 129.025 are instructed, 121.500 is emergency, so E8c
+        # picks 126.825.
         entry = next(entry for entry in self.exported['ctas']
                      if entry['name'] == 'LONDON GATWICK CTA')
         self.assertEqual(entry['upper_limit'], '2500 FT ALT')
         self.assertEqual(entry['lower_limit'], '1500 FT ALT')
         self.assertEqual(entry['_class'], 'D')
-        self.assertEqual(entry['frequency'], 118.95)
+        self.assertEqual(entry['frequency'], 126.825)
+        self.assertEqual(entry['frequency_annotation'],
+                         'DOC 45 NM/24,500 FT.')
+        self.assertIs(entry['frequency_ambiguous'], False)
         self.assertEqual(entry['frequencies'],
                          [118.95, 121.5, 126.825, 129.025])
         self.assertEqual(entry['squawk'], '')

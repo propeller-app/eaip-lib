@@ -94,6 +94,79 @@ def _frequency(record: typing.Mapping[str, typing.Any]) -> typing.Union[float, s
     return ''
 
 
+# Annotations that mark a frequency as a secondary channel. Only these two
+# phrases are excluded; "As directed", "directed by ATC", DOC and notes are
+# operational descriptions and stay eligible.
+SECONDARY_FREQUENCY_MARKERS = ('instructed by atc', 'emergency')
+
+
+def _is_secondary_frequency(annotation: typing.Optional[str]) -> bool:
+    text = (annotation or '').lower()
+    return any(marker in text for marker in SECONDARY_FREQUENCY_MARKERS)
+
+
+def _unit_frequencies(record: typing.Mapping[str, typing.Any],
+                      unit: typing.Mapping[str, typing.Any]
+                      ) -> typing.List[typing.Tuple[str, typing.Optional[str]]]:
+    """
+    A unit's printed frequencies paired with their annotations.
+    """
+    frequencies = unit.get('frequencies') or []
+    annotations = unit.get('frequency_annotations')
+    if annotations is None:
+        annotations = [None] * len(frequencies)
+    if len(annotations) != len(frequencies):
+        raise ValueError(
+            f'{record["name"]}: frequency_annotations is not aligned with '
+            'frequencies')
+    return list(zip(frequencies, annotations))
+
+
+def select_frequency(
+        record: typing.Mapping[str, typing.Any]
+) -> typing.Tuple[str, str, bool]:
+    """
+    Choose one frequency for an ENR-2.1 record and report its annotation.
+
+    The pick is the first non-secondary frequency in the first unit that has
+    one. A frequency is secondary when its annotation contains one of
+    :data:`SECONDARY_FREQUENCY_MARKERS` (case-insensitive); nothing else is
+    excluded. If every frequency is secondary the very first frequency is
+    used. A record with no frequency returns ``('', '', False)``.
+
+    ``ambiguous`` is True when the record has more than one distinct
+    non-secondary frequency across all its units.
+
+    :return: ``(printed_frequency, annotation_or_"", ambiguous)``.
+    """
+    units = record.get('units') or []
+    picked = None
+    non_secondary = []
+
+    for unit in units:
+        for text, annotation in _unit_frequencies(record, unit):
+            value = _parse_frequency(text, record['name'])
+            if _is_secondary_frequency(annotation):
+                continue
+            if value not in non_secondary:
+                non_secondary.append(value)
+            if picked is None:
+                picked = (text, annotation or '')
+
+    if picked is None:
+        for unit in units:
+            for text, annotation in _unit_frequencies(record, unit):
+                _parse_frequency(text, record['name'])
+                picked = (text, annotation or '')
+                break
+            if picked is not None:
+                break
+
+    if picked is None:
+        return '', '', False
+    return picked[0], picked[1], len(non_secondary) > 1
+
+
 def _boundary(record: typing.Mapping[str, typing.Any],
               boundaries: typing.Mapping[str, typing.Mapping[str, typing.Any]]
               ) -> typing.Tuple[typing.List[dict], typing.List[str]]:
@@ -124,12 +197,16 @@ def export_airspaces(
     than one keyword.
 
     Entry keys are always ``name``, ``upper_limit``, ``lower_limit``,
-    ``_class``, ``frequency``, ``squawk``, ``boundary``, ``band_index``,
+    ``_class``, ``frequency``, ``frequency_annotation``,
+    ``frequency_ambiguous``, ``squawk``, ``boundary``, ``band_index``,
     ``frequencies``, ``exclusions`` and ``source``. ``frequency`` is a MHz
-    float or ``''``; ``frequencies`` is every distinct MHz float in document
-    order; ``squawk`` is always ``''`` because ENR-2.1 has no machine-readable
-    squawk. Boundary points are WGS84 decimal degrees and the ring is closed
-    (first point equals last).
+    float or ``''``; ``frequency_annotation`` is the chosen frequency's
+    annotation (``''`` when none); ``frequency_ambiguous`` is True when the
+    record has more than one distinct non-secondary frequency;
+    ``frequencies`` is every distinct MHz float in document order; ``squawk``
+    is always ``''`` because ENR-2.1 has no machine-readable squawk. Boundary
+    points are WGS84 decimal degrees and the ring is closed (first point
+    equals last).
 
     :param records: Records from :func:`eaip.enr21.parse_enr21`.
     :param boundaries: The parsed mapping from
@@ -149,7 +226,10 @@ def export_airspaces(
             continue
 
         frequencies = _frequencies(record)
-        frequency = _frequency(record)
+        frequency_text, frequency_annotation, frequency_ambiguous = (
+            select_frequency(record))
+        frequency = (_parse_frequency(frequency_text, name)
+                     if frequency_text else '')
         points, exclusions = _boundary(record, boundaries)
 
         for index, band in enumerate(record['bands']):
@@ -159,6 +239,8 @@ def export_airspaces(
                 'lower_limit': _normalise_limit(band.get('lower'), name),
                 '_class': _class(band.get('class'), name),
                 'frequency': frequency,
+                'frequency_annotation': frequency_annotation,
+                'frequency_ambiguous': frequency_ambiguous,
                 'squawk': '',
                 'boundary': [dict(point) for point in points],
                 'band_index': index,
@@ -237,11 +319,13 @@ def export_danger(
     ``n FT ALT/AGL``, ``As Per AUP / UUP`` or absent (exported as ``''``).
 
     Entry keys are always ``name``, ``upper_limit``, ``lower_limit``,
-    ``ident``, ``boundary``, ``section``, ``approximate``, ``exclusions`` and
-    ``source``. Limits are as printed (``FL 195`` -> ``FL195``); boundary
-    points are WGS84 decimal degrees and the ring is closed (first equals
-    last). A record missing from ``boundaries`` is reported in ``skipped``,
-    not raised.
+    ``ident``, ``eaip_ident``, ``boundary``, ``section``, ``approximate``,
+    ``exclusions`` and ``source``. ``ident`` is the label form with the leading
+    ``EG`` removed (``EGD044`` -> ``D044``) and ``eaip_ident`` is the printed
+    ident. Limits are as printed (``FL 195`` -> ``FL195``); boundary points
+    are WGS84 decimal degrees and the ring is closed (first equals last). A
+    record missing from ``boundaries`` is reported in ``skipped``, not
+    raised.
 
     :param records: Records from :func:`eaip.enr51.parse_enr51`.
     :param boundaries: The parsed mapping from
@@ -249,7 +333,9 @@ def export_danger(
         value), keyed by ident.
     :return: ``{'danger': [...], 'skipped': [{'ident', 'name', 'section',
         'reason'}]}`` in document order.
-    :raises ValueError: If an exported limit is not a known printed form.
+    :raises ValueError: If an exported limit is not a known printed form, an
+        ident does not start with ``EG``, or two exported records share the
+        ident after stripping ``EG``.
     """
     result = {'danger': [], 'skipped': []}
 
@@ -269,6 +355,10 @@ def export_danger(
                 'reason': upper_text or 'missing upper limit',
             })
             continue
+
+        if not isinstance(ident, str) or not ident.startswith('EG'):
+            raise ValueError(f'{ident!r}: ident does not start with EG')
+        label_ident = ident[2:]
 
         upper = _danger_text(upper_text)
         lower_limit = limits.get('lower')
@@ -293,7 +383,8 @@ def export_danger(
             'name': name,
             'upper_limit': upper,
             'lower_limit': lower,
-            'ident': ident,
+            'ident': label_ident,
+            'eaip_ident': ident,
             'boundary': [dict(point) for point in parsed['points']],
             'section': section,
             'approximate': bool(parsed.get('approximate')),
@@ -301,6 +392,12 @@ def export_danger(
             'source': 'ENR-5.1',
         })
 
+    labels = [entry['ident'] for entry in result['danger']]
+    duplicates = sorted({label for label in labels if labels.count(label) > 1})
+    if duplicates:
+        raise ValueError(
+            'duplicate danger ident after stripping EG: '
+            + ', '.join(duplicates))
     return result
 
 
@@ -360,7 +457,7 @@ def export_vors(
             'location': {'lat': location['lat'], 'lng': location['lng']},
             'frequency': str(frequency['value']),
             'dme': 'DME' in components,
-            'rotation': ROSE_ROTATION_SIGN * start,
+            'rotation': ROSE_ROTATION_SIGN * start + 0.0,
             'name': record['name'],
             'type': record['type'],
             'source': 'ENR-4.1',

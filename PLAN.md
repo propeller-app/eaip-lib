@@ -10,6 +10,7 @@ Fixtures are saved eAIP pages in tests/fixtures/. The human saves them; never fe
 - ppr is hardcoded False
 - Exclusions that live in remarks, not boundary_text: BELFAST TMA 1 ('But excluding the Belfast CTR'), BRIZE NORTON CTR ('excluding any Airspace which is within the ATZ of Oxford Aerodrome'). exclusions is therefore incomplete until E8 decides whether to carry remarks across as a free-text note or turn them into exclusions entries.
 - L975 Crossing Area remarks (fixture lines 14843, 14878, 14920) say 'bounded by straight lines joining ...'; check in E6 or E8 whether these records describe a different shape.
+- caa-map follow-up (separate repo): AGL/FL/UNL/AUP in danger_area_map_data, rotation sign visual check at STN, blank squawk
 
 ## Tasks
 
@@ -97,7 +98,30 @@ Done: `eaip.export.write_airspace_files` writes 382 CTA, 1 CTR and 39 TMA entrie
 Files: extend eaip/export.py, tests. danger.json: export 1035 records whose upper limit has digits (ALT 315, AGL 661, FL 59), limits as printed with 'FL 195' -> 'FL195'; the 272 UNL/AUP records go to danger_skipped.json with reason; extra keys section, approximate (bool), source; follow-up task in caa-map to make the renderer handle AGL/FL/UNL/AUP. vors.json: only the 21 rows with a VOR component (20 VOR/DME + PTH); id, location, frequency as str(value) e.g. '114.3', dme = 'DME' in components, rotation = -(declination if present else magnetic_variation) with the sign in one constant; sanity-check CPT and BIG against the old file.
 Done: `eaip.export.write_danger_vors_files` writes 1035 danger entries + 272 skipped (227 AUP, 45 UNL) and 21 VORs + 33 skipped (31 DME, 2 NDB); suite 118/118.
 
-### E8c [ ] ENR-2.1 frequency selection: choose the best single frequency per CTA/CTR/TMA from unit names (176 of 419 records have several distinct frequencies; Gatwick CTA first=118.950 vs old 126.825); and a caa-map follow-up list: renderer must handle AGL/FL/UNL/AUP in danger_area_map_data (georeference.py:884), rotation sign check, squawk blank
+### E8c [x] ENR-2.1 frequency selection and danger ident labels
+Files: eaip/enr21.py, eaip/export.py, tests, scripts/frequency_check.py.
+Done: done; frequency rule skips instructed/emergency annotations; frequency_annotation + frequency_ambiguous added; danger ident stripped + eaip_ident; rotation -0.0 fixed; E8d manual check added
+
+### E8d [ ] Manual frequency check against the real CAA chart (James)
+Compare the frequency printed on the chart with the exported value, and note the chart edition date: the eAIP data here carries AIRAC amendments up to 29 OCT 2026, so a chart older than that may differ for reasons that are not rule errors. Full list of ambiguous entries: run `PYTHONPATH=. uv run python scripts/frequency_check.py` and read out/frequency_check.txt.
+
+ Record | Exported now | Other candidate | What the check decides
+ LONDON GATWICK CTA | 126.825 | 118.950 / 129.025 (instructed by ATC), 121.500 (emergency) | Confirms the narrow rule on its own origin case
+ PRESTWICK CTA 1-6 | 124.630 | 129.455 | Narrow vs wide rule ("As directed" secondary)
+ DAVENTRY CTA 1, 2, 10 | 119.530 | 134.430 | Narrow vs wide rule
+ BRIZE NORTON CTR | 119.005 (ZONE) | 124.280 (RADAR) | Which unit the chart prints
+ BERRY HEAD CTA 1 | 134.755 (LONDON CONTROL) | 125.855 (CARDIFF RADAR) | Whether the first unit is right for en-route CTAs
+ LONDON TMA 1 | 118.825 | 13 further London Control values | Only if the chart prints a frequency; TMA labels in caa-map do not read frequency, so low priority
+ MANCHESTER TMA 1 | 128.055 (SCOTTISH ACC) | 118.580 (MANCHESTER APP) | Same: low priority
+
+ Decision rules for the follow-up session (apply after James reports results; if anything does not fit a rule, stop and ask Claude, do not guess):
+ R1 Gatwick. Chart shows 126.825: narrow rule confirmed, no change. Anything else: stop and report; the rule fails on the case it was built from.
+ R2 Prestwick and Daventry together. If the chart shows the current picks (124.630, 119.530): keep the narrow rule and mark the "As directed" follow-up closed. If the chart shows the other candidates (129.455, 134.430): add "as directed" and "directed by atc" to the secondary-marker constant in select_frequency, update tests d/e (exported records that then differ from first-unit-first-frequency: Gatwick 1, Prestwick CTA 1-6 6, Daventry 3 = 10; SCOTTISH FIR and LONDON UIR are not exported), re-run the suite and the offline runner. If Prestwick and Daventry disagree with each other, or the chart shows a third value: do not change the rule; record each result in PLAN.md and ask Claude.
+ R3 Brize Norton. 119.005: no change. 124.280: ask Claude (unit choice question). Both printed: note it for the caa-map follow-up (label format); no export change.
+ R4 Berry Head. Chart shows 134.755: first-unit rule holds. Chart shows 125.855: ask Claude (a local-unit preference becomes necessary; do not implement it without a design decision).
+ R5 TMA records. Record the result only; no code change.
+ R6 Any other mismatch found while checking: add a line "NAME: exported X, chart Y" under a "Frequency mismatches" heading in PLAN.md. If 3 or more mismatches share a pattern (same unit type, same annotation wording), stop and ask Claude. A per-record override table is one possible fix but needs a design decision first; do not build it.
+ R7 When every R-rule is resolved, tick E8d and add the date and the chart edition used.
 
 ### E9 [ ] Investigate MATZ and VRP sources
 Research only, no code: report where MATZ and VRPs are published and whether NATS eAIP has them.

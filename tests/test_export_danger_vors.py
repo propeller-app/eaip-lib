@@ -14,7 +14,7 @@ ENR51 = pathlib.Path(__file__).parent / 'fixtures' / 'EG-ENR-5.1.html'
 ENR41 = pathlib.Path(__file__).parent / 'fixtures' / 'EG-ENR-4.1.html'
 
 DANGER_KEYS = {
-    'name', 'upper_limit', 'lower_limit', 'ident', 'boundary',
+    'name', 'upper_limit', 'lower_limit', 'ident', 'eaip_ident', 'boundary',
     'section', 'approximate', 'exclusions', 'source',
 }
 UPPER_RE = re.compile(r'^(FL\d+|\d+ FT (ALT|AGL))$')
@@ -110,14 +110,14 @@ class TestExportDanger(unittest.TestCase):
             self.assertRegex(entry['upper_limit'], UPPER_RE)
 
     def test_approximate_records_are_flagged(self):
-        flagged = [entry['ident'] for entry in self.exported['danger']
+        flagged = [entry['eaip_ident'] for entry in self.exported['danger']
                    if entry['approximate']]
         # The 6 approximate ENR-5.1 records; all fall in the exported set.
         self.assertEqual(flagged, ['EGD012', 'EGD031', 'EGD138D',
                                    'EGD401', 'EGD710', 'EGD802'])
 
     def test_named_records(self):
-        by_ident = {entry['ident']: entry
+        by_ident = {entry['eaip_ident']: entry
                     for entry in self.exported['danger']}
         # EGD001: fixture upper "1000 FT ALT", lower "SFC".
         self.assertEqual(by_ident['EGD001']['name'], 'TREVOSE HEAD')
