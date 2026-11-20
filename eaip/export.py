@@ -5,6 +5,8 @@ import typing
 
 from eaip.airspace.boundary import parse_boundaries
 from eaip.enr21 import parse_enr21
+from eaip.enr41 import parse_enr41
+from eaip.enr51 import parse_enr51, parse_enr51_boundaries
 
 
 _SOURCE = 'ENR-2.1'
@@ -195,3 +197,213 @@ def write_airspace_files(html: str, out_dir: str) -> typing.Dict[str, list]:
                   encoding='utf-8') as handle:
             json.dump(result[key], handle, ensure_ascii=False, indent=1)
     return result
+
+
+# Positive PIL Image.rotate turns the image counter-clockwise. An easterly
+# variation puts magnetic north east of true north, so the rose must turn
+# clockwise: rotation = -value. This sign is a chart convention derived from
+# the rose image, not something caa-map's code states.
+ROSE_ROTATION_SIGN = -1
+
+_DANGER_UPPER_RE = re.compile(r'^(FL\d+|\d+ FT (?:ALT|AGL))$')
+_DANGER_LOWER_RE = re.compile(
+    r'^(FL\d+|\d+ FT (?:ALT|AGL)|SFC|As Per AUP / UUP)?$')
+
+
+def _danger_text(text: typing.Optional[str]) -> str:
+    """
+    Printed limit text, whitespace-normalised and ``FL 195`` -> ``FL195``.
+    """
+    if text is None:
+        return ''
+    value = re.sub(r'\s+', ' ', text).strip()
+    match = _FL_RE.match(value)
+    if match is not None:
+        value = f'FL{match.group(1)}'
+    return value
+
+
+def export_danger(
+        records: typing.Iterable[typing.Mapping[str, typing.Any]],
+        boundaries: typing.Mapping[str, typing.Mapping[str, typing.Any]],
+) -> typing.Dict[str, typing.List[dict]]:
+    """
+    Export ENR-5.1 records in caa-map's danger.json shape.
+
+    Only records whose printed upper limit contains a digit are exported, so
+    the renderer's ``re.findall(r'(\\d+)', upper_limit)[0]`` cannot raise.
+    ``UNL`` and ``As Per AUP / UUP`` records go to ``skipped`` with the
+    printed text as the reason. Lower limits may be ``SFC``, ``FL n``,
+    ``n FT ALT/AGL``, ``As Per AUP / UUP`` or absent (exported as ``''``).
+
+    Entry keys are always ``name``, ``upper_limit``, ``lower_limit``,
+    ``ident``, ``boundary``, ``section``, ``approximate``, ``exclusions`` and
+    ``source``. Limits are as printed (``FL 195`` -> ``FL195``); boundary
+    points are WGS84 decimal degrees and the ring is closed (first equals
+    last). A record missing from ``boundaries`` is reported in ``skipped``,
+    not raised.
+
+    :param records: Records from :func:`eaip.enr51.parse_enr51`.
+    :param boundaries: The parsed mapping from
+        :func:`eaip.enr51.parse_enr51_boundaries` (first element of its return
+        value), keyed by ident.
+    :return: ``{'danger': [...], 'skipped': [{'ident', 'name', 'section',
+        'reason'}]}`` in document order.
+    :raises ValueError: If an exported limit is not a known printed form.
+    """
+    result = {'danger': [], 'skipped': []}
+
+    for record in records:
+        ident = record['ident']
+        name = record['name']
+        section = record['section']
+        limits = record.get('limits') or {}
+        upper_limit = limits.get('upper')
+        upper_text = '' if upper_limit is None else (upper_limit.get('text') or '')
+
+        if re.search(r'\d', upper_text) is None:
+            result['skipped'].append({
+                'ident': ident,
+                'name': name,
+                'section': section,
+                'reason': upper_text or 'missing upper limit',
+            })
+            continue
+
+        upper = _danger_text(upper_text)
+        lower_limit = limits.get('lower')
+        lower = _danger_text(
+            None if lower_limit is None else lower_limit.get('text'))
+        if _DANGER_UPPER_RE.match(upper) is None:
+            raise ValueError(f'{ident}: unknown upper limit {upper!r}')
+        if _DANGER_LOWER_RE.match(lower) is None:
+            raise ValueError(f'{ident}: unknown lower limit {lower!r}')
+
+        parsed = boundaries.get(ident)
+        if parsed is None:
+            result['skipped'].append({
+                'ident': ident,
+                'name': name,
+                'section': section,
+                'reason': 'missing boundary',
+            })
+            continue
+
+        result['danger'].append({
+            'name': name,
+            'upper_limit': upper,
+            'lower_limit': lower,
+            'ident': ident,
+            'boundary': [dict(point) for point in parsed['points']],
+            'section': section,
+            'approximate': bool(parsed.get('approximate')),
+            'exclusions': list(parsed.get('exclusions') or []),
+            'source': 'ENR-5.1',
+        })
+
+    return result
+
+
+def export_vors(
+        records: typing.Iterable[typing.Mapping[str, typing.Any]]
+) -> typing.Dict[str, typing.List[dict]]:
+    """
+    Export ENR-4.1 rows that have a VOR component in caa-map's vors.json shape.
+
+    Only rows whose ``components`` include ``VOR`` are exported (VOR and
+    VOR/DME); DME-only and NDB rows go to ``skipped``. ``frequency`` is the
+    printed MHz value as a string (``str(value)``), ``dme`` is True when
+    ``DME`` is also a component, and ``rotation`` is
+    ``ROSE_ROTATION_SIGN * (declination or magnetic_variation)`` in degrees.
+
+    Entry keys are always ``id``, ``location``, ``frequency``, ``dme``,
+    ``rotation``, ``name``, ``type``, ``source`` and ``rotation_source``.
+
+    :param records: Records from :func:`eaip.enr41.parse_enr41`.
+    :return: ``{'vors': [...], 'skipped': [{'id', 'name', 'type',
+        'reason'}]}`` in document order.
+    :raises ValueError: If a VOR row has no declination and no magnetic
+        variation, or no frequency.
+    """
+    result = {'vors': [], 'skipped': []}
+
+    for record in records:
+        components = record.get('components') or []
+        if 'VOR' not in components:
+            result['skipped'].append({
+                'id': record['id'],
+                'name': record['name'],
+                'type': record['type'],
+                'reason': 'no VOR component',
+            })
+            continue
+
+        declination = record.get('declination')
+        variation = record.get('magnetic_variation')
+        if declination is not None:
+            start = declination['value']
+            rotation_source = 'declination'
+        elif variation is not None:
+            start = variation['value']
+            rotation_source = 'magnetic_variation'
+        else:
+            raise ValueError(
+                f'{record["id"]}: no declination or magnetic variation')
+
+        frequency = record.get('frequency')
+        if frequency is None:
+            raise ValueError(f'{record["id"]}: missing frequency')
+        location = record['location']
+
+        result['vors'].append({
+            'id': record['id'],
+            'location': {'lat': location['lat'], 'lng': location['lng']},
+            'frequency': str(frequency['value']),
+            'dme': 'DME' in components,
+            'rotation': ROSE_ROTATION_SIGN * start,
+            'name': record['name'],
+            'type': record['type'],
+            'source': 'ENR-4.1',
+            'rotation_source': rotation_source,
+        })
+
+    return result
+
+
+def write_danger_vors_files(enr51_html: str, enr41_html: str,
+                            out_dir: str) -> typing.Dict[str, dict]:
+    """
+    Parse ENR-5.1 and ENR-4.1 and write the four caa-map JSON files.
+
+    Files are ``danger.json``, ``danger_skipped.json``, ``vors.json`` and
+    ``vors_skipped.json``, written with UTF-8 and one-space indentation. The
+    directory is created if needed. Boundary failures raise instead of writing
+    a partial export.
+
+    :param enr51_html: The eAIP ENR-5.1 HTML document.
+    :param enr41_html: The eAIP ENR-4.1 HTML document.
+    :param out_dir: Directory to write the four files into.
+    :return: ``{'danger': export_danger(...), 'vors': export_vors(...)}``.
+    :raises ValueError: If a boundary fails to parse, or a record is invalid.
+    """
+    danger_records = parse_enr51(enr51_html)
+    boundaries, failed = parse_enr51_boundaries(danger_records)
+    if failed:
+        raise ValueError(
+            f'{len(failed)} boundaries failed to parse: {failed}')
+
+    danger = export_danger(danger_records, boundaries)
+    vors = export_vors(parse_enr41(enr41_html))
+
+    os.makedirs(out_dir, exist_ok=True)
+    files = (
+        ('danger.json', danger['danger']),
+        ('danger_skipped.json', danger['skipped']),
+        ('vors.json', vors['vors']),
+        ('vors_skipped.json', vors['skipped']),
+    )
+    for filename, value in files:
+        with open(os.path.join(out_dir, filename), 'w',
+                  encoding='utf-8') as handle:
+            json.dump(value, handle, ensure_ascii=False, indent=1)
+    return {'danger': danger, 'vors': vors}

@@ -93,8 +93,11 @@ Done: `eaip.enr41.parse_enr41` returns 54 raw records (20 VOR/DME, 1 VOR, 31 DME
 Files: new eaip/export.py, new tests/test_export_airspace.py. Writes one entry per band, routes by name keyword, skips FIR/UIR/OCA.
 Done: `eaip.export.write_airspace_files` writes 382 CTA, 1 CTR and 39 TMA entries (422 total) plus 6 skipped records; suite 103/103.
 
-### E8b [ ] JSON export: danger and navaids
+### E8b [x] JSON export: danger and navaids
 Files: extend eaip/export.py, tests. danger.json: export 1035 records whose upper limit has digits (ALT 315, AGL 661, FL 59), limits as printed with 'FL 195' -> 'FL195'; the 272 UNL/AUP records go to danger_skipped.json with reason; extra keys section, approximate (bool), source; follow-up task in caa-map to make the renderer handle AGL/FL/UNL/AUP. vors.json: only the 21 rows with a VOR component (20 VOR/DME + PTH); id, location, frequency as str(value) e.g. '114.3', dme = 'DME' in components, rotation = -(declination if present else magnetic_variation) with the sign in one constant; sanity-check CPT and BIG against the old file.
+Done: `eaip.export.write_danger_vors_files` writes 1035 danger entries + 272 skipped (227 AUP, 45 UNL) and 21 VORs + 33 skipped (31 DME, 2 NDB); suite 118/118.
+
+### E8c [ ] ENR-2.1 frequency selection: choose the best single frequency per CTA/CTR/TMA from unit names (176 of 419 records have several distinct frequencies; Gatwick CTA first=118.950 vs old 126.825); and a caa-map follow-up list: renderer must handle AGL/FL/UNL/AUP in danger_area_map_data (georeference.py:884), rotation sign check, squawk blank
 
 ### E9 [ ] Investigate MATZ and VRP sources
 Research only, no code: report where MATZ and VRPs are published and whether NATS eAIP has them.
